@@ -9,7 +9,3 @@ phases:
   build:
     commands:
       - pre-commit run --all-files
-      - cd "$CODEBUILD_SRC_DIR/taskset"
-      - mvn clean verify --no-transfer-progress
-      - cd "$CODEBUILD_SRC_DIR/primarytaskset"
-      - mvn clean verify --no-transfer-progress
