@@ -1,6 +1,7 @@
 package com.amazonaws.ec2.localgatewayroutetablevpcassociation;
 
 import software.amazon.awssdk.services.ec2.model.LocalGatewayRouteTableVpcAssociation;
+import software.amazon.cloudformation.proxy.HandlerErrorCode;
 
 import java.util.stream.Collectors;
 
@@ -34,5 +35,16 @@ public class Translator {
             .key(tag.key())
             .value(tag.value())
             .build();
+    }
+
+    static HandlerErrorCode getHandlerErrorForEc2Error(final String errorCode) {
+        switch (errorCode) {
+            case "UnauthorizedOperation":
+                return HandlerErrorCode.AccessDenied;
+            case "InvalidParameter":
+                return HandlerErrorCode.InvalidRequest;
+            default:
+                return HandlerErrorCode.GeneralServiceException;
+        }
     }
 }

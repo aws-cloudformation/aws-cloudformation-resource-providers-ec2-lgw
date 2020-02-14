@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Constants.POLLING_DELAY_SECONDS;
+import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Translator.getHandlerErrorForEc2Error;
 import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Translator.createModelFromAssociation;
 
 public class CreateHandler extends BaseHandler<CallbackContext> {
@@ -32,6 +33,7 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
                 model.setTags(tags);
             }
             request.setDesiredResourceState(model);
+            return createInProgressEvent(model, 0);
         }
 
         final ReadHandler readHandler = new ReadHandler();
@@ -45,12 +47,21 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
             return createInProgressEvent(model);
         }
         if (tags != null && !tags.isEmpty()) {
-            final CreateTagsRequest createTagsRequest = CreateTagsRequest
-                .builder()
-                .tags(tags.stream().map(Translator::createSdkTagFromCfnTag).collect(Collectors.toSet()))
-                .resources(model.getLocalGatewayRouteTableVpcAssociationId())
-                .build();
-            proxy.injectCredentialsAndInvokeV2(createTagsRequest, client::createTags);
+            try {
+                final CreateTagsRequest createTagsRequest = CreateTagsRequest
+                    .builder()
+                    .tags(tags.stream().map(Translator::createSdkTagFromCfnTag).collect(Collectors.toSet()))
+                    .resources(model.getLocalGatewayRouteTableVpcAssociationId())
+                    .build();
+                proxy.injectCredentialsAndInvokeV2(createTagsRequest, client::createTags);
+            } catch (Ec2Exception e) {
+                return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                    .resourceModel(resultModel)
+                    .status(OperationStatus.FAILED)
+                    .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                    .message(e.getMessage())
+                    .build();
+            }
         }
         return ProgressEvent.<ResourceModel, CallbackContext>builder()
             .resourceModel(resultModel)
@@ -83,12 +94,16 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
     }
 
     private ProgressEvent<ResourceModel, CallbackContext> createInProgressEvent(ResourceModel model) {
+        return createInProgressEvent(model, POLLING_DELAY_SECONDS);
+    }
+
+    private ProgressEvent<ResourceModel, CallbackContext> createInProgressEvent(ResourceModel model, int callbackDelay) {
         CallbackContext context = CallbackContext.builder()
             .createStarted(true)
             .build();
         return ProgressEvent.<ResourceModel, CallbackContext>builder()
             .callbackContext(context)
-            .callbackDelaySeconds(POLLING_DELAY_SECONDS)
+            .callbackDelaySeconds(callbackDelay)
             .status(OperationStatus.IN_PROGRESS)
             .resourceModel(model)
             .build();

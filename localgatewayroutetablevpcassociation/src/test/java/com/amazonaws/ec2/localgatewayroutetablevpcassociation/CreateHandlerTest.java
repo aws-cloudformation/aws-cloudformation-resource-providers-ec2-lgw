@@ -10,6 +10,7 @@ import software.amazon.awssdk.services.ec2.model.DescribeLocalGatewayRouteTableV
 import software.amazon.awssdk.services.ec2.model.Ec2Exception;
 import software.amazon.cloudformation.exceptions.CfnAlreadyExistsException;
 import software.amazon.cloudformation.proxy.AmazonWebServicesClientProxy;
+import software.amazon.cloudformation.proxy.HandlerErrorCode;
 import software.amazon.cloudformation.proxy.Logger;
 import software.amazon.cloudformation.proxy.OperationStatus;
 import software.amazon.cloudformation.proxy.ProgressEvent;
@@ -53,6 +54,10 @@ public class CreateHandlerTest extends TestBase {
         .desiredResourceState(model)
         .build();
 
+    private final ResourceHandlerRequest<ResourceModel> requestAfterAssociationCreated = ResourceHandlerRequest.<ResourceModel>builder()
+        .desiredResourceState(createModelFromAssociation(TEST_ASSOCIATION))
+        .build();
+
     private final CallbackContext inProgressContext = CallbackContext.builder()
         .createStarted(true)
         .build();
@@ -64,7 +69,7 @@ public class CreateHandlerTest extends TestBase {
     }
 
     @Test
-    public void handleRequest_CreateNotStarted_Success() {
+    public void handleRequest_CreateNotStarted_InProgress() {
         final CreateLocalGatewayRouteTableVpcAssociationResponse createResponse = CreateLocalGatewayRouteTableVpcAssociationResponse
             .builder()
             .localGatewayRouteTableVpcAssociation(TEST_ASSOCIATION)
@@ -87,12 +92,10 @@ public class CreateHandlerTest extends TestBase {
 
         verify(proxy)
             .injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any());
-        verify(proxy, times(0))
-            .injectCredentialsAndInvokeV2(any(CreateTagsRequest.class), any());
 
         assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo(OperationStatus.SUCCESS);
-        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.IN_PROGRESS);
+        assertThat(response.getCallbackContext()).isEqualTo(inProgressContext);
         assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
         assertThat(response.getResourceModel()).isEqualTo(createModelFromAssociation(TEST_ASSOCIATION));
         assertThat(response.getResourceModels()).isNull();
@@ -101,19 +104,12 @@ public class CreateHandlerTest extends TestBase {
     }
 
     @Test
-    public void handleRequest_CreateWithTagsNotStarted_Success() {
-        final CreateLocalGatewayRouteTableVpcAssociationResponse createResponse = CreateLocalGatewayRouteTableVpcAssociationResponse
-            .builder()
-            .localGatewayRouteTableVpcAssociation(TEST_ASSOCIATION_WITH_TAGS)
-            .build();
-
+    public void handleRequest_CreateWithTagsStarted_Success() {
         final DescribeLocalGatewayRouteTableVpcAssociationsResponse describeResponse = DescribeLocalGatewayRouteTableVpcAssociationsResponse
             .builder()
             .localGatewayRouteTableVpcAssociations(TEST_ASSOCIATION_WITH_TAGS)
             .build();
 
-        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any()))
-            .thenReturn(createResponse);
         Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
             .thenReturn(describeResponse);
 
@@ -126,6 +122,7 @@ public class CreateHandlerTest extends TestBase {
         final ResourceModel modelWithTags = ResourceModel.builder()
             .vpcId(VPC_ID)
             .localGatewayRouteTableId(ROUTE_TABLE_ID)
+            .localGatewayRouteTableVpcAssociationId(ASSOCIATION_ID)
             .tags(tagSet)
             .build();
         final ResourceHandlerRequest<ResourceModel> requestWithTags = ResourceHandlerRequest.<ResourceModel>builder()
@@ -133,10 +130,8 @@ public class CreateHandlerTest extends TestBase {
             .build();
 
         final ProgressEvent<ResourceModel, CallbackContext> response
-            = handler.handleRequest(proxy, requestWithTags, null, logger);
+            = handler.handleRequest(proxy, requestWithTags, inProgressContext, logger);
 
-        verify(proxy)
-            .injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any());
         verify(proxy)
             .injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any());
         final CreateTagsRequest expectedCreateTagsRequest = CreateTagsRequest
@@ -156,6 +151,65 @@ public class CreateHandlerTest extends TestBase {
         assertThat(response.getResourceModels()).isNull();
         assertThat(response.getMessage()).isNull();
         assertThat(response.getErrorCode()).isNull();
+    }
+
+    @Test
+    public void handleRequest_CreateTagsThrowsError_Fails() {
+        final DescribeLocalGatewayRouteTableVpcAssociationsResponse describeResponse = DescribeLocalGatewayRouteTableVpcAssociationsResponse
+            .builder()
+            .localGatewayRouteTableVpcAssociations(TEST_ASSOCIATION_WITH_TAGS)
+            .build();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
+            .thenReturn(describeResponse);
+
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("UnauthorizedOperation")
+            .build();
+        final Ec2Exception unauthorizedException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(CreateTagsRequest.class), any())).thenThrow(unauthorizedException);
+
+        final CreateHandler handler = new CreateHandler();
+
+        final Set<Tag> tagSet = new HashSet<>();
+        tagSet.add(Tag.builder().key("Name").value("MyAssociation").build());
+        tagSet.add(Tag.builder().key("Stage").value("Prod").build());
+
+        final ResourceModel modelWithTags = ResourceModel.builder()
+            .vpcId(VPC_ID)
+            .localGatewayRouteTableId(ROUTE_TABLE_ID)
+            .localGatewayRouteTableVpcAssociationId(ASSOCIATION_ID)
+            .tags(tagSet)
+            .build();
+        final ResourceHandlerRequest<ResourceModel> requestWithTags = ResourceHandlerRequest.<ResourceModel>builder()
+            .desiredResourceState(modelWithTags)
+            .build();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, requestWithTags, inProgressContext, logger);
+
+        verify(proxy)
+            .injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any());
+        final CreateTagsRequest expectedCreateTagsRequest = CreateTagsRequest
+            .builder()
+            .tags(TEST_ASSOCIATION_WITH_TAGS.tags())
+            .resources(TEST_ASSOCIATION_WITH_TAGS.localGatewayRouteTableVpcAssociationId())
+            .build();
+
+        verify(proxy)
+            .injectCredentialsAndInvokeV2(eq(expectedCreateTagsRequest), any());
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(createModelFromAssociation(TEST_ASSOCIATION_WITH_TAGS));
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.AccessDenied);
     }
 
     @Test
@@ -207,28 +261,18 @@ public class CreateHandlerTest extends TestBase {
 
     @Test
     public void handleRequest_AssociationNotFound_InProgress() {
-        final CreateLocalGatewayRouteTableVpcAssociationResponse createResponse = CreateLocalGatewayRouteTableVpcAssociationResponse
-            .builder()
-            .localGatewayRouteTableVpcAssociation(TEST_ASSOCIATION)
-            .build();
-
         final DescribeLocalGatewayRouteTableVpcAssociationsResponse describeResponse = DescribeLocalGatewayRouteTableVpcAssociationsResponse
             .builder()
             .localGatewayRouteTableVpcAssociations(Collections.emptyList())
             .build();
 
-        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any()))
-            .thenReturn(createResponse);
         Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
             .thenReturn(describeResponse);
 
         final CreateHandler handler = new CreateHandler();
 
         final ProgressEvent<ResourceModel, CallbackContext> response
-            = handler.handleRequest(proxy, request, null, logger);
-
-        verify(proxy)
-            .injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any());
+            = handler.handleRequest(proxy, requestAfterAssociationCreated, inProgressContext, logger);
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(OperationStatus.IN_PROGRESS);
@@ -242,28 +286,18 @@ public class CreateHandlerTest extends TestBase {
 
     @Test
     public void handleRequest_AssociationPending_InProgress() {
-        final CreateLocalGatewayRouteTableVpcAssociationResponse createResponse = CreateLocalGatewayRouteTableVpcAssociationResponse
-            .builder()
-            .localGatewayRouteTableVpcAssociation(TEST_ASSOCIATION)
-            .build();
-
         final DescribeLocalGatewayRouteTableVpcAssociationsResponse describeResponse = DescribeLocalGatewayRouteTableVpcAssociationsResponse
             .builder()
             .localGatewayRouteTableVpcAssociations(PENDING_ASSOCIATION)
             .build();
 
-        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any()))
-            .thenReturn(createResponse);
         Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
             .thenReturn(describeResponse);
 
         final CreateHandler handler = new CreateHandler();
 
         final ProgressEvent<ResourceModel, CallbackContext> response
-            = handler.handleRequest(proxy, request, null, logger);
-
-        verify(proxy)
-            .injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any());
+            = handler.handleRequest(proxy, requestAfterAssociationCreated, inProgressContext, logger);
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(OperationStatus.IN_PROGRESS);
