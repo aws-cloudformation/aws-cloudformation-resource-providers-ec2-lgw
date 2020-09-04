@@ -1,11 +1,6 @@
-## My Project
+## aws-cloudformation-resource-providers-ec2-lgw
 
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+CloudFormation resource provider packages for Ec2 LocalGateway related resources.
 
 ## License
 

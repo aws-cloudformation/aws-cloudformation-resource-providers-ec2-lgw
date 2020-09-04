@@ -1,0 +1,16 @@
+{
+    "typeName": "AWS::EC2::LocalGatewayRoute",
+    "language": "java",
+    "runtime": "java8",
+    "entrypoint": "com.amazonaws.ec2.localgatewayroute.HandlerWrapper::handleRequest",
+    "testEntrypoint": "com.amazonaws.ec2.localgatewayroute.HandlerWrapper::testEntrypoint",
+    "settings": {
+        "namespace": [
+            "com",
+            "amazonaws",
+            "ec2",
+            "localgatewayroute"
+        ],
+        "protocolVersion": "2.0.0"
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "typeName": "AWS::EC2::LocalGatewayRouteTableVPCAssociation",
+    "language": "java",
+    "runtime": "java8",
+    "entrypoint": "com.amazonaws.ec2.localgatewayroutetablevpcassociation.HandlerWrapper::handleRequest",
+    "testEntrypoint": "com.amazonaws.ec2.localgatewayroutetablevpcassociation.HandlerWrapper::testEntrypoint",
+    "settings": {
+        "namespace": [
+            "com",
+            "amazonaws",
+            "ec2",
+            "localgatewayroutetablevpcassociation"
+        ],
+        "protocolVersion": "2.0.0"
+    }
+}
