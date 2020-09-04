@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.services.ec2.model.*;
 import software.amazon.cloudformation.exceptions.CfnAlreadyExistsException;
 import software.amazon.cloudformation.proxy.*;
@@ -98,7 +99,39 @@ public class CreateHandlerTest extends TestBase {
             .thenReturn(activeSearchLgwRoutesResponse);
 
         assertThrows(CfnAlreadyExistsException.class, () -> handler.handleRequest(proxy, request, null, logger));
+    }
 
+    @Test
+    public void handleRequest_CreateRouteThrowsError_Fails() {
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("InvalidParameter")
+            .build();
+
+        final Ec2Exception invalidParamException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
+            .thenReturn(emptyLocalGatewayRoutesResponse, activeSearchLgwRoutesResponse);
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteRequest.class), any()))
+            .thenThrow(invalidParamException);
+
+        request.setDesiredResourceState(startingModel);
+
+        final CreateHandler handler = new CreateHandler();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, null, logger);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isNull();
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.InvalidRequest);
     }
 
     @Test
@@ -190,6 +223,44 @@ public class CreateHandlerTest extends TestBase {
     }
 
     @Test
+    public void handleRequest_CreateStarted_ReadFails_Failed() {
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("UnauthorizedOperation")
+            .build();
+
+        final Ec2Exception unauthorizedException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+
+        request.setDesiredResourceState(activeModel);
+
+        final CreateHandler handler = new CreateHandler();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
+            .thenThrow(unauthorizedException);
+
+        final CallbackContext inProgressContext = CallbackContext.builder()
+            .createStarted(true)
+            .build();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, inProgressContext, logger);
+
+        verify(proxy, times(0))
+            .injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any());
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(activeModel);
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.AccessDenied);
+    }
+
+    @Test
     public void handleRequest_RoutePending_Fails() {
         request.setDesiredResourceState(startingModel);
 
@@ -212,7 +283,6 @@ public class CreateHandlerTest extends TestBase {
             .thenReturn(deletingSearchLgwRoutesResponse);
 
         assertThrows(CfnAlreadyExistsException.class, () -> handler.handleRequest(proxy, request, null, logger));
-
     }
 
 }

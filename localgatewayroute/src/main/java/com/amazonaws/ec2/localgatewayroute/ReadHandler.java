@@ -23,7 +23,7 @@ public class ReadHandler extends BaseHandler<CallbackContext> {
         final ResourceModel model = request.getDesiredResourceState();
 
         return ProgressEvent.<ResourceModel, CallbackContext>builder()
-            .resourceModel(searchForRoute(model.getLocalGatewayRouteTableId(), model.getDestinationCidrBlock(), proxy, ClientBuilder.getClient()))
+            .resourceModel(searchForRoute(model.getLocalGatewayRouteTableId(), model.getDestinationCidrBlock(), proxy, ClientBuilder.getClient(logger)))
             .status(OperationStatus.SUCCESS)
             .build();
     }

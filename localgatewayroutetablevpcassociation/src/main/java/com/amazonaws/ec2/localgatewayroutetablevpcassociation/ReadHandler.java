@@ -20,7 +20,7 @@ public class ReadHandler extends BaseHandler<CallbackContext> {
         final Logger logger) {
 
         final ResourceModel model = request.getDesiredResourceState();
-        final Ec2Client client = ClientBuilder.getClient();
+        final Ec2Client client = ClientBuilder.getClient(logger);
 
         return ProgressEvent.<ResourceModel, CallbackContext>builder()
             .resourceModel(describeVpcAssociation(model.getLocalGatewayRouteTableVpcAssociationId(), proxy, client))

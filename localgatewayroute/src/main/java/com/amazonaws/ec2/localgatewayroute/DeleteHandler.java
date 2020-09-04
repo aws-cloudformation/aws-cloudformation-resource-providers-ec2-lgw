@@ -6,6 +6,8 @@ import software.amazon.awssdk.services.ec2.model.Ec2Exception;
 import software.amazon.cloudformation.exceptions.CfnNotFoundException;
 import software.amazon.cloudformation.proxy.*;
 
+import static com.amazonaws.ec2.localgatewayroute.Translator.getHandlerErrorForEc2Error;
+
 public class DeleteHandler extends BaseHandler<CallbackContext> {
 
     @Override
@@ -16,10 +18,19 @@ public class DeleteHandler extends BaseHandler<CallbackContext> {
         final Logger logger) {
 
         final ResourceModel model = request.getDesiredResourceState();
-        final Ec2Client client = ClientBuilder.getClient();
+        final Ec2Client client = ClientBuilder.getClient(logger);
 
         if (callbackContext == null || !callbackContext.isDeleteStarted()) {
-            deleteLocalGatewayRoute(model.getDestinationCidrBlock(), model.getLocalGatewayRouteTableId(), proxy, client);
+            try {
+                deleteLocalGatewayRoute(model.getDestinationCidrBlock(), model.getLocalGatewayRouteTableId(), proxy, client);
+            } catch (Ec2Exception e) {
+                return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                    .resourceModel(model)
+                    .status(OperationStatus.FAILED)
+                    .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                    .message(e.getMessage())
+                    .build();
+            }
         }
         final ReadHandler readHandler = new ReadHandler();
         try {
@@ -28,6 +39,13 @@ public class DeleteHandler extends BaseHandler<CallbackContext> {
         } catch (CfnNotFoundException expected) {
             return ProgressEvent.<ResourceModel, CallbackContext>builder()
                 .status(OperationStatus.SUCCESS)
+                .build();
+        } catch (Ec2Exception e) {
+            return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                .resourceModel(model)
+                .status(OperationStatus.FAILED)
+                .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                .message(e.getMessage())
                 .build();
         }
     }
@@ -44,20 +62,7 @@ public class DeleteHandler extends BaseHandler<CallbackContext> {
             .localGatewayRouteTableId(localGatewayRouteTableId)
             .build();
 
-        try {
-            proxy.injectCredentialsAndInvokeV2(deleteRequest, client::deleteLocalGatewayRoute);
-        } catch (Ec2Exception e) {
-            // no matching route table found
-            if ("InvalidLocalGatewayRouteTableID.NotFound".equals(e.awsErrorDetails().errorCode())) {
-                throw new CfnNotFoundException(ResourceModel.TYPE_NAME, localGatewayRouteTableId);
-            }
-            // no matching cidr found
-            if ("InvalidRoute.NotFound".equals(e.awsErrorDetails().errorCode())) {
-                throw new CfnNotFoundException(ResourceModel.TYPE_NAME, destinationCidrBlock);
-            }
-
-            throw e;
-        }
+        proxy.injectCredentialsAndInvokeV2(deleteRequest, client::deleteLocalGatewayRoute);
     }
 
     private ProgressEvent<ResourceModel, CallbackContext> createInProgressEvent(ResourceModel model) {

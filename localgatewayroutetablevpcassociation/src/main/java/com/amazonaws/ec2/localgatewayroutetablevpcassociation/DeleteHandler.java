@@ -7,6 +7,7 @@ import software.amazon.cloudformation.exceptions.CfnNotFoundException;
 import software.amazon.cloudformation.proxy.*;
 
 import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Constants.POLLING_DELAY_SECONDS;
+import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Translator.getHandlerErrorForEc2Error;
 
 public class DeleteHandler extends BaseHandler<CallbackContext> {
 
@@ -18,10 +19,19 @@ public class DeleteHandler extends BaseHandler<CallbackContext> {
         final Logger logger) {
 
         final ResourceModel model = request.getDesiredResourceState();
-        final Ec2Client client = ClientBuilder.getClient();
+        final Ec2Client client = ClientBuilder.getClient(logger);
 
         if (callbackContext == null || !callbackContext.isDeleteStarted()) {
-            deleteAssociation(model.getLocalGatewayRouteTableVpcAssociationId(), proxy, client);
+            try {
+                deleteAssociation(model.getLocalGatewayRouteTableVpcAssociationId(), proxy, client);
+            } catch (Ec2Exception e) {
+                return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                    .resourceModel(model)
+                    .status(OperationStatus.FAILED)
+                    .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                    .message(e.getMessage())
+                    .build();
+            }
         }
         final ReadHandler readHandler = new ReadHandler();
         try {
@@ -30,6 +40,13 @@ public class DeleteHandler extends BaseHandler<CallbackContext> {
         } catch (CfnNotFoundException expected) {
             return ProgressEvent.<ResourceModel, CallbackContext>builder()
                 .status(OperationStatus.SUCCESS)
+                .build();
+        } catch (Ec2Exception e) {
+            return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                .resourceModel(model)
+                .status(OperationStatus.FAILED)
+                .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                .message(e.getMessage())
                 .build();
         }
     }

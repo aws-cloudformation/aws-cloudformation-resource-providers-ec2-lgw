@@ -26,9 +26,18 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
 
         ResourceModel model = request.getDesiredResourceState();
         Set<Tag> tags = model.getTags();
-        final Ec2Client client = ClientBuilder.getClient();
+        final Ec2Client client = ClientBuilder.getClient(logger);
         if (callbackContext == null || !callbackContext.isCreateStarted()) {
-            model = createAssociation(model.getLocalGatewayRouteTableId(), model.getVpcId(), proxy, client);
+            try {
+                model = createAssociation(model.getLocalGatewayRouteTableId(), model.getVpcId(), proxy, client);
+            } catch (Ec2Exception e) {
+                return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                    .resourceModel(model)
+                    .status(OperationStatus.FAILED)
+                    .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                    .message(e.getMessage())
+                    .build();
+            }
             if (tags != null) {
                 model.setTags(tags);
             }
@@ -45,6 +54,13 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
             }
         } catch (CfnNotFoundException e) {
             return createInProgressEvent(model);
+        } catch (Ec2Exception e) {
+            return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                .resourceModel(model)
+                .status(OperationStatus.FAILED)
+                .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                .message(e.getMessage())
+                .build();
         }
         if (tags != null && !tags.isEmpty()) {
             try {
@@ -80,7 +96,6 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
             .localGatewayRouteTableId(localGatewayRouteTableId)
             .vpcId(vpcId)
             .build();
-
         try {
             return createModelFromAssociation(proxy.injectCredentialsAndInvokeV2(request, client::createLocalGatewayRouteTableVpcAssociation)
                 .localGatewayRouteTableVpcAssociation());

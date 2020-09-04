@@ -2,6 +2,7 @@ package com.amazonaws.ec2.localgatewayroute;
 
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.CreateLocalGatewayRouteRequest;
+import software.amazon.awssdk.services.ec2.model.Ec2Exception;
 import software.amazon.awssdk.services.ec2.model.Filter;
 import software.amazon.awssdk.services.ec2.model.SearchLocalGatewayRoutesRequest;
 import software.amazon.awssdk.services.ec2.model.SearchLocalGatewayRoutesResponse;
@@ -10,6 +11,7 @@ import software.amazon.cloudformation.exceptions.CfnNotFoundException;
 import software.amazon.cloudformation.proxy.*;
 
 import static com.amazonaws.ec2.localgatewayroute.CallbackContext.POLLING_DELAY_SECONDS;
+import static com.amazonaws.ec2.localgatewayroute.Translator.getHandlerErrorForEc2Error;
 
 public class CreateHandler extends BaseHandler<CallbackContext> {
 
@@ -22,15 +24,19 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
 
         final ResourceModel model = request.getDesiredResourceState();
 
-        final Ec2Client client = com.amazonaws.ec2.localgatewayroute.ClientBuilder.getClient();
+        final Ec2Client client = com.amazonaws.ec2.localgatewayroute.ClientBuilder.getClient(logger);
 
         if (callbackContext == null || !callbackContext.isCreateStarted()) {
-            createLocalGatewayRoute(
-                model.getLocalGatewayRouteTableId(),
-                model.getDestinationCidrBlock(),
-                model.getLocalGatewayVirtualInterfaceGroupId(),
-                proxy,
-                client);
+            try {
+                createLocalGatewayRoute(
+                    model.getLocalGatewayRouteTableId(),
+                    model.getDestinationCidrBlock(),
+                    model.getLocalGatewayVirtualInterfaceGroupId(),
+                    proxy,
+                    client);
+            } catch (Ec2Exception e) {
+                return ProgressEvent.defaultFailureHandler(e, getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()));
+            }
         }
 
         final ReadHandler readHandler = new ReadHandler();
@@ -54,6 +60,13 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
             }
         } catch (CfnNotFoundException e) {
             return createInProgressEvent(model);
+        } catch (Ec2Exception e) {
+            return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                .resourceModel(model)
+                .status(OperationStatus.FAILED)
+                .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
+                .message(e.getMessage())
+                .build();
         }
     }
 

@@ -104,6 +104,35 @@ public class CreateHandlerTest extends TestBase {
     }
 
     @Test
+    public void handleRequest_CreateNotStarted_Failed() {
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("UnexpectedError")
+            .build();
+
+        final Ec2Exception unexpectedException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any()))
+            .thenThrow(unexpectedException);
+
+        final CreateHandler handler = new CreateHandler();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, null, logger);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(model);
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.GeneralServiceException);
+    }
+
+    @Test
     public void handleRequest_CreateWithTagsStarted_Success() {
         final DescribeLocalGatewayRouteTableVpcAssociationsResponse describeResponse = DescribeLocalGatewayRouteTableVpcAssociationsResponse
             .builder()
@@ -257,6 +286,38 @@ public class CreateHandlerTest extends TestBase {
         assertThat(response.getResourceModels()).isNull();
         assertThat(response.getMessage()).isNull();
         assertThat(response.getErrorCode()).isNull();
+    }
+
+    @Test
+    public void handleRequest_CreateStarted_Failed() {
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("UnexpectedError")
+            .build();
+
+        final Ec2Exception unexpectedException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
+            .thenThrow(unexpectedException);
+
+        final CreateHandler handler = new CreateHandler();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, inProgressContext, logger);
+
+        verify(proxy, times(0))
+            .injectCredentialsAndInvokeV2(any(CreateLocalGatewayRouteTableVpcAssociationRequest.class), any());
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(model);
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.GeneralServiceException);
     }
 
     @Test

@@ -71,20 +71,30 @@ public class DeleteHandlerTest extends TestBase {
     public void handleRequest_RouteTableIdNotFound() {
 
         final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
-            .errorCode("InvalidLocalGatewayRouteTableID.NotFound")
-            .build();
+                .errorCode("InvalidLocalGatewayRouteTableID.NotFound")
+                .build();
 
         final Ec2Exception notFoundException = (Ec2Exception) Ec2Exception
-            .builder()
-            .awsErrorDetails(errorDetails)
-            .build();
+                .builder()
+                .awsErrorDetails(errorDetails)
+                .build();
 
         when(proxy.injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any()))
                 .thenThrow(notFoundException);
 
         final DeleteHandler handler = new DeleteHandler();
 
-        assertThrows(CfnNotFoundException.class, () -> handler.handleRequest(proxy, request, null, logger));
+        final ProgressEvent<ResourceModel, CallbackContext> response
+                = handler.handleRequest(proxy, request, null, logger);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(request.getDesiredResourceState());
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.NotFound);
     }
 
 
@@ -104,7 +114,17 @@ public class DeleteHandlerTest extends TestBase {
 
         final DeleteHandler handler = new DeleteHandler();
 
-        assertThrows(CfnNotFoundException.class, () -> handler.handleRequest(proxy, request, null, logger));
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, null, logger);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(request.getDesiredResourceState());
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.NotFound);
     }
 
     @Test
@@ -153,6 +173,35 @@ public class DeleteHandlerTest extends TestBase {
         assertThat(response.getResourceModels()).isNull();
         assertThat(response.getMessage()).isNull();
         assertThat(response.getErrorCode()).isNull();
+    }
+
+    @Test
+    public void handleRequest_DeleteStartedReadFails_Failed() {
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("UnexpectedError")
+            .build();
+
+        final Ec2Exception unexpectedException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
+            .thenThrow(unexpectedException);
+
+        final DeleteHandler handler = new DeleteHandler();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, inProgressContext, logger);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(activeModel);
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.GeneralServiceException);
     }
 
 }

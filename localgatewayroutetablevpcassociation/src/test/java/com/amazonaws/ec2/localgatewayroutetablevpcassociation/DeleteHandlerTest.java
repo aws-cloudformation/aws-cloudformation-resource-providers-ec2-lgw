@@ -10,6 +10,7 @@ import software.amazon.awssdk.services.ec2.model.DescribeLocalGatewayRouteTableV
 import software.amazon.awssdk.services.ec2.model.Ec2Exception;
 import software.amazon.cloudformation.exceptions.CfnNotFoundException;
 import software.amazon.cloudformation.proxy.AmazonWebServicesClientProxy;
+import software.amazon.cloudformation.proxy.HandlerErrorCode;
 import software.amazon.cloudformation.proxy.Logger;
 import software.amazon.cloudformation.proxy.OperationStatus;
 import software.amazon.cloudformation.proxy.ProgressEvent;
@@ -86,6 +87,42 @@ public class DeleteHandlerTest extends TestBase {
     }
 
     @Test
+    public void handleRequest_DeleteNotStarted_Failed() {
+        final DescribeLocalGatewayRouteTableVpcAssociationsResponse describeResponse = DescribeLocalGatewayRouteTableVpcAssociationsResponse
+            .builder()
+            .localGatewayRouteTableVpcAssociations(Collections.emptyList())
+            .build();
+
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("UnexpectedError")
+            .build();
+
+        final Ec2Exception unexpectedException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
+            .thenReturn(describeResponse);
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteTableVpcAssociationRequest.class), any()))
+            .thenThrow(unexpectedException);
+
+        final DeleteHandler handler = new DeleteHandler();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, null, logger);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(model);
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.GeneralServiceException);
+    }
+
+    @Test
     public void handleRequest_NotFound() {
 
         final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
@@ -159,5 +196,34 @@ public class DeleteHandlerTest extends TestBase {
         assertThat(response.getResourceModels()).isNull();
         assertThat(response.getMessage()).isNull();
         assertThat(response.getErrorCode()).isNull();
+    }
+
+    @Test
+    public void handleRequest_DeleteStarted_Failed() {
+        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+            .errorCode("UnauthorizedOperation")
+            .build();
+
+        final Ec2Exception unauthorizedException = (Ec2Exception) Ec2Exception
+            .builder()
+            .awsErrorDetails(errorDetails)
+            .build();
+
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
+            .thenThrow(unauthorizedException);
+
+        final DeleteHandler handler = new DeleteHandler();
+
+        final ProgressEvent<ResourceModel, CallbackContext> response
+            = handler.handleRequest(proxy, request, inProgressContext, logger);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+        assertThat(response.getCallbackContext()).isNull();
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+        assertThat(response.getResourceModel()).isEqualTo(model);
+        assertThat(response.getResourceModels()).isNull();
+        assertThat(response.getMessage()).isNotNull();
+        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.AccessDenied);
     }
 }

@@ -1,6 +1,7 @@
 package com.amazonaws.ec2.localgatewayroutetablevpcassociation;
 
 import software.amazon.awssdk.services.ec2.model.LocalGatewayRouteTableVpcAssociation;
+import software.amazon.awssdk.services.ec2.model.TagDescription;
 import software.amazon.cloudformation.proxy.HandlerErrorCode;
 
 import java.util.stream.Collectors;
@@ -27,6 +28,13 @@ public class Translator {
         return software.amazon.awssdk.services.ec2.model.Tag.builder()
             .key(tag.getKey())
             .value(tag.getValue())
+            .build();
+    }
+
+    static Tag createCfnTagFromTagDescription(final TagDescription tagDescription) {
+        return Tag.builder()
+            .key(tagDescription.key())
+            .value(tagDescription.value())
             .build();
     }
 

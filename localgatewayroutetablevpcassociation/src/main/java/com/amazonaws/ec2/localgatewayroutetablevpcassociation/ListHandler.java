@@ -20,7 +20,7 @@ public class ListHandler extends BaseHandler<CallbackContext> {
         final CallbackContext callbackContext,
         final Logger logger) {
 
-        final List<ResourceModel> models = describeAllVpcAssociations(proxy, ClientBuilder.getClient());
+        final List<ResourceModel> models = describeAllVpcAssociations(proxy, ClientBuilder.getClient(logger));
 
         return ProgressEvent.<ResourceModel, CallbackContext>builder()
             .resourceModels(models)
