@@ -13,7 +13,7 @@ before_script:
 jobs:
   include:
     - script: |
-        for directory in $TRAVIS_BUILD_DIR/aws-*; do
+        for directory in $TRAVIS_BUILD_DIR/localgateway*; do
           cd "$directory"
           mvn -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn -B clean verify || travis_terminate 1
         done
