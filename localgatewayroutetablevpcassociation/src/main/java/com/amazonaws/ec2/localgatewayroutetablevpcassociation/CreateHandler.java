@@ -2,14 +2,13 @@ package com.amazonaws.ec2.localgatewayroutetablevpcassociation;
 
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.CreateLocalGatewayRouteTableVpcAssociationRequest;
-import software.amazon.awssdk.services.ec2.model.CreateTagsRequest;
 import software.amazon.awssdk.services.ec2.model.Ec2Exception;
+import software.amazon.awssdk.services.ec2.model.TagSpecification;
 import software.amazon.cloudformation.exceptions.CfnAlreadyExistsException;
 import software.amazon.cloudformation.exceptions.CfnNotFoundException;
 import software.amazon.cloudformation.proxy.*;
 
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Constants.POLLING_DELAY_SECONDS;
 import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Translator.getHandlerErrorForEc2Error;
@@ -25,11 +24,24 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
         final Logger logger) {
 
         ResourceModel model = request.getDesiredResourceState();
-        Set<Tag> tags = model.getTags();
         final Ec2Client client = ClientBuilder.getClient(logger);
         if (callbackContext == null || !callbackContext.isCreateStarted()) {
+            // Return InvalidRequest if caller is attempting to set a read-only property
+            if (model.getLocalGatewayId() != null) {
+                return createFailedReadOnlyPropertyEvent(model, "LocalGatewayId");
+            }
+            if (model.getLocalGatewayRouteTableVpcAssociationId() != null) {
+                return createFailedReadOnlyPropertyEvent(model, "LocalGatewayRouteTableVpcAssociationId");
+            }
+            if (model.getState() != null) {
+                return createFailedReadOnlyPropertyEvent(model, "State");
+            }
             try {
-                model = createAssociation(model.getLocalGatewayRouteTableId(), model.getVpcId(), proxy, client);
+                model = createAssociation(model.getLocalGatewayRouteTableId(),
+                        model.getVpcId(),
+                        TagHelper.getAllResourceTags(request),
+                        proxy,
+                        client);
             } catch (Ec2Exception e) {
                 return ProgressEvent.<ResourceModel, CallbackContext>builder()
                     .resourceModel(model)
@@ -37,9 +49,6 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
                     .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
                     .message(e.getMessage())
                     .build();
-            }
-            if (tags != null) {
-                model.setTags(tags);
             }
             request.setDesiredResourceState(model);
             return createInProgressEvent(model, 0);
@@ -62,23 +71,6 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
                 .message(e.getMessage())
                 .build();
         }
-        if (tags != null && !tags.isEmpty()) {
-            try {
-                final CreateTagsRequest createTagsRequest = CreateTagsRequest
-                    .builder()
-                    .tags(tags.stream().map(Translator::createSdkTagFromCfnTag).collect(Collectors.toSet()))
-                    .resources(model.getLocalGatewayRouteTableVpcAssociationId())
-                    .build();
-                proxy.injectCredentialsAndInvokeV2(createTagsRequest, client::createTags);
-            } catch (Ec2Exception e) {
-                return ProgressEvent.<ResourceModel, CallbackContext>builder()
-                    .resourceModel(resultModel)
-                    .status(OperationStatus.FAILED)
-                    .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
-                    .message(e.getMessage())
-                    .build();
-            }
-        }
         return ProgressEvent.<ResourceModel, CallbackContext>builder()
             .resourceModel(resultModel)
             .status(OperationStatus.SUCCESS)
@@ -88,16 +80,19 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
     private ResourceModel createAssociation(
         final String localGatewayRouteTableId,
         final String vpcId,
+        final Set<Tag> tags,
         final AmazonWebServicesClientProxy proxy,
         final Ec2Client client) {
 
-        final CreateLocalGatewayRouteTableVpcAssociationRequest request = CreateLocalGatewayRouteTableVpcAssociationRequest
+        final CreateLocalGatewayRouteTableVpcAssociationRequest.Builder request = CreateLocalGatewayRouteTableVpcAssociationRequest
             .builder()
             .localGatewayRouteTableId(localGatewayRouteTableId)
-            .vpcId(vpcId)
-            .build();
+            .vpcId(vpcId);
+        if (tags != null && !tags.isEmpty()) {
+            request.tagSpecifications(TagSpecification.builder().resourceType("local-gateway-route-table-vpc-association").tags(TagHelper.createSdkTagsFromCfnTags(tags)).build());
+        }
         try {
-            return createModelFromAssociation(proxy.injectCredentialsAndInvokeV2(request, client::createLocalGatewayRouteTableVpcAssociation)
+            return createModelFromAssociation(proxy.injectCredentialsAndInvokeV2(request.build(), client::createLocalGatewayRouteTableVpcAssociation)
                 .localGatewayRouteTableVpcAssociation());
         } catch (Ec2Exception e) {
             if ("LocalGatewayRouteTableVpcAssociationAlreadyExists".equals(e.awsErrorDetails().errorCode())) {
@@ -122,5 +117,14 @@ public class CreateHandler extends BaseHandler<CallbackContext> {
             .status(OperationStatus.IN_PROGRESS)
             .resourceModel(model)
             .build();
+    }
+
+    private ProgressEvent<ResourceModel, CallbackContext> createFailedReadOnlyPropertyEvent(ResourceModel model, String readOnlyProperty) {
+        return ProgressEvent.<ResourceModel, CallbackContext>builder()
+                .resourceModel(model)
+                .status(OperationStatus.FAILED)
+                .errorCode(HandlerErrorCode.InvalidRequest)
+                .message("Cannot set read-only property " + readOnlyProperty)
+                .build();
     }
 }

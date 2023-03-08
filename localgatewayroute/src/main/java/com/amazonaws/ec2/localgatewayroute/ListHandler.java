@@ -7,6 +7,7 @@ import software.amazon.cloudformation.proxy.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.amazonaws.ec2.localgatewayroute.EventGenerator.createSuccessEventForMultipleModels;
 import static java.util.stream.Collectors.toList;
 
 public class ListHandler extends BaseHandler<CallbackContext> {
@@ -20,11 +21,7 @@ public class ListHandler extends BaseHandler<CallbackContext> {
 
         final List<ResourceModel> models = describeAllRoutes(proxy, ClientBuilder.getClient(logger));
 
-        return ProgressEvent.<ResourceModel, CallbackContext>builder()
-            .resourceModels(models)
-            .status(OperationStatus.SUCCESS)
-            .nextToken(null)
-            .build();
+        return createSuccessEventForMultipleModels(models);
     }
 
     private List<ResourceModel> describeAllRoutes(
@@ -37,15 +34,25 @@ public class ListHandler extends BaseHandler<CallbackContext> {
 
         for (String localGatewayRouteTableId : localGatewayRouteTableIds) {
             do {
-                final SearchLocalGatewayRoutesRequest request = SearchLocalGatewayRoutesRequest
-                    .builder()
-                    .localGatewayRouteTableId(localGatewayRouteTableId)
-                    .filters(Filter.builder().name("state").values("active").build())
-                    .nextToken(nextToken)
-                    .build();
-                final SearchLocalGatewayRoutesResponse response = proxy.injectCredentialsAndInvokeV2(request, client::searchLocalGatewayRoutes);
-                nextToken = response.nextToken();
-                routes.addAll(response.routes());
+                try {
+                    final SearchLocalGatewayRoutesRequest request = SearchLocalGatewayRoutesRequest
+                            .builder()
+                            .localGatewayRouteTableId(localGatewayRouteTableId)
+                            .filters(
+                                    Filter.builder().name("state").values("active", "blackhole").build(),
+                                    Filter.builder().name("type").values("static").build()
+                            )
+                            .nextToken(nextToken)
+                            .build();
+                    final SearchLocalGatewayRoutesResponse response = proxy.injectCredentialsAndInvokeV2(request, client::searchLocalGatewayRoutes);
+                    nextToken = response.nextToken();
+                    routes.addAll(response.routes());
+                } catch (Ec2Exception e) {
+                    // If an account doesn't have permissions to search routes on an LGW route table, just ignore that route table
+                    if (!"InvalidLocalGatewayRouteTableID.NotFound".equals(e.awsErrorDetails().errorCode())) {
+                        throw e;
+                    }
+                }
             } while (nextToken != null);
         }
 

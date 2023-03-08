@@ -6,7 +6,9 @@ import software.amazon.awssdk.services.ec2.model.Ec2Exception;
 import software.amazon.cloudformation.exceptions.CfnNotFoundException;
 import software.amazon.cloudformation.proxy.*;
 
-import static com.amazonaws.ec2.localgatewayroute.Translator.getHandlerErrorForEc2Error;
+import static com.amazonaws.ec2.localgatewayroute.EventGenerator.createFailedEvent;
+import static com.amazonaws.ec2.localgatewayroute.EventGenerator.createInProgressEvent;
+import static com.amazonaws.ec2.localgatewayroute.EventGenerator.createSuccessEvent;
 
 public class DeleteHandler extends BaseHandler<CallbackContext> {
 
@@ -24,29 +26,17 @@ public class DeleteHandler extends BaseHandler<CallbackContext> {
             try {
                 deleteLocalGatewayRoute(model.getDestinationCidrBlock(), model.getLocalGatewayRouteTableId(), proxy, client);
             } catch (Ec2Exception e) {
-                return ProgressEvent.<ResourceModel, CallbackContext>builder()
-                    .resourceModel(model)
-                    .status(OperationStatus.FAILED)
-                    .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
-                    .message(e.getMessage())
-                    .build();
+                return createFailedEvent(model, e);
             }
         }
         final ReadHandler readHandler = new ReadHandler();
         try {
             final ResourceModel readModel = readHandler.handleRequest(proxy, request, null, logger).getResourceModel();
-            return createInProgressEvent(readModel);
+            return createInProgressEventForDelete(readModel);
         } catch (CfnNotFoundException expected) {
-            return ProgressEvent.<ResourceModel, CallbackContext>builder()
-                .status(OperationStatus.SUCCESS)
-                .build();
+            return createSuccessEvent(null);
         } catch (Ec2Exception e) {
-            return ProgressEvent.<ResourceModel, CallbackContext>builder()
-                .resourceModel(model)
-                .status(OperationStatus.FAILED)
-                .errorCode(getHandlerErrorForEc2Error(e.awsErrorDetails().errorCode()))
-                .message(e.getMessage())
-                .build();
+            return createFailedEvent(model, e);
         }
     }
 
@@ -65,15 +55,7 @@ public class DeleteHandler extends BaseHandler<CallbackContext> {
         proxy.injectCredentialsAndInvokeV2(deleteRequest, client::deleteLocalGatewayRoute);
     }
 
-    private ProgressEvent<ResourceModel, CallbackContext> createInProgressEvent(ResourceModel model) {
-        CallbackContext context = CallbackContext.builder()
-            .deleteStarted(true)
-            .build();
-        return ProgressEvent.<ResourceModel, CallbackContext>builder()
-            .callbackContext(context)
-            .callbackDelaySeconds(CallbackContext.POLLING_DELAY_SECONDS)
-            .status(OperationStatus.IN_PROGRESS)
-            .resourceModel(model)
-            .build();
+    private ProgressEvent<ResourceModel, CallbackContext> createInProgressEventForDelete(ResourceModel model) {
+        return createInProgressEvent(model, CallbackContext.builder().deleteStarted(true).build());
     }
 }

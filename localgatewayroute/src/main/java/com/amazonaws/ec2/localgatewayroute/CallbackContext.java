@@ -13,5 +13,7 @@ import lombok.NoArgsConstructor;
 public class CallbackContext {
     private boolean createStarted;
     private boolean deleteStarted;
+    private boolean updateStarted;
+
     public static final int POLLING_DELAY_SECONDS = 5;
 }

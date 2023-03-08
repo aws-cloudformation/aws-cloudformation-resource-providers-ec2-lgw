@@ -17,8 +17,10 @@ import software.amazon.cloudformation.proxy.OperationStatus;
 import software.amazon.cloudformation.proxy.ProgressEvent;
 import software.amazon.cloudformation.proxy.ResourceHandlerRequest;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static com.amazonaws.ec2.localgatewayroutetablevpcassociation.Translator.createModelFromAssociation;
@@ -113,20 +115,21 @@ public class UpdateHandlerTest extends TestBase {
         Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(DescribeLocalGatewayRouteTableVpcAssociationsRequest.class), any()))
             .thenReturn(describeResponse);
 
-        final Set<Tag> newTags = new HashSet<>();
-        newTags.add(Tag.builder().key("Name").value("MyAssociation").build());
-        newTags.add(Tag.builder().key("Stage").value("Test").build());
-        newTags.add(Tag.builder().key("NewKey").value("NewValue").build());
+        // Set tags on each of the places tags can be applied: resource-level and stack-level
+        Map<String, String> stackTags = Collections.singletonMap("Stage", "Test");
+        Tag resourceLevelTag1 = Tag.builder().key("Name").value("MyAssociation").build();
+        Tag resourceLevelTag2 = Tag.builder().key("NewKey").value("NewValue").build();
 
         final ResourceModel model = ResourceModel
             .builder()
             .localGatewayRouteTableId(ROUTE_TABLE_ID)
             .vpcId(VPC_ID)
             .localGatewayRouteTableVpcAssociationId(ASSOCIATION_ID)
-            .tags(newTags)
+            .tags(new HashSet<>(Arrays.asList(resourceLevelTag1, resourceLevelTag2)))
             .build();
         final ResourceHandlerRequest<ResourceModel> request = ResourceHandlerRequest.<ResourceModel>builder()
             .desiredResourceState(model)
+            .desiredResourceTags(stackTags)
             .build();
 
         final UpdateHandler handler = new UpdateHandler();

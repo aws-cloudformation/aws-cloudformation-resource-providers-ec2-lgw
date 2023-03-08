@@ -9,6 +9,7 @@ import software.amazon.cloudformation.exceptions.CfnGeneralServiceException;
 import software.amazon.cloudformation.exceptions.CfnNotFoundException;
 import software.amazon.cloudformation.proxy.*;
 
+import static com.amazonaws.ec2.localgatewayroute.EventGenerator.createSuccessEvent;
 import static com.amazonaws.ec2.localgatewayroute.Translator.createModelFromRoute;
 
 public class ReadHandler extends BaseHandler<CallbackContext> {
@@ -22,10 +23,7 @@ public class ReadHandler extends BaseHandler<CallbackContext> {
 
         final ResourceModel model = request.getDesiredResourceState();
 
-        return ProgressEvent.<ResourceModel, CallbackContext>builder()
-            .resourceModel(searchForRoute(model.getLocalGatewayRouteTableId(), model.getDestinationCidrBlock(), proxy, ClientBuilder.getClient(logger)))
-            .status(OperationStatus.SUCCESS)
-            .build();
+        return createSuccessEvent(searchForRoute(model.getLocalGatewayRouteTableId(), model.getDestinationCidrBlock(), proxy, ClientBuilder.getClient(logger)));
     }
 
     private ResourceModel searchForRoute(
@@ -40,7 +38,8 @@ public class ReadHandler extends BaseHandler<CallbackContext> {
         do {
             SearchLocalGatewayRoutesRequest request = SearchLocalGatewayRoutesRequest.builder()
                 .localGatewayRouteTableId(localGatewayRouteTableId)
-                .filters(Filter.builder().name("route-search.exact-match").values(destinationCidr).build())
+                .filters(Filter.builder().name("route-search.exact-match").values(destinationCidr).build(),
+                        Filter.builder().name("type").values("static").build())
                 .nextToken(nextToken)
                 .build();
             final SearchLocalGatewayRoutesResponse response = proxy.injectCredentialsAndInvokeV2(request, client::searchLocalGatewayRoutes);

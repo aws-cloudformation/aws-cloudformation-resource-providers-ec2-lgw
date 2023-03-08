@@ -8,13 +8,15 @@ class Translator {
     }
 
     static ResourceModel createModelFromRoute(LocalGatewayRoute route) {
+        // One of LGW VIF Group ID and ENI ID will be null
         return ResourceModel.builder()
-            .destinationCidrBlock(route.destinationCidrBlock())
-            .localGatewayRouteTableId(route.localGatewayRouteTableId())
-            .localGatewayVirtualInterfaceGroupId(route.localGatewayVirtualInterfaceGroupId())
-            .state(route.state() == null ? null : route.state().toString())
-            .type(route.type() == null ? null : route.type().toString())
-            .build();
+                .destinationCidrBlock(route.destinationCidrBlock())
+                .localGatewayRouteTableId(route.localGatewayRouteTableId())
+                .localGatewayVirtualInterfaceGroupId(route.localGatewayVirtualInterfaceGroupId())
+                .networkInterfaceId(route.networkInterfaceId())
+                .state(route.state() == null ? null : route.state().toString())
+                .type(route.type() == null ? null : route.type().toString())
+                .build();
     }
 
     static HandlerErrorCode getHandlerErrorForEc2Error(final String errorCode) {
