@@ -51,7 +51,7 @@ public class UpdateHandler extends BaseHandler<CallbackContext> {
                     .build();
             }
             final Set<Tag> currentTags = existingResource.getTags();
-            final Set<Tag> desiredTags = model.getTags();
+            final Set<Tag> desiredTags = TagHelper.getAllResourceTags(request);
             if (currentTags.equals(desiredTags)) {
                 return ProgressEvent.<ResourceModel, CallbackContext>builder()
                     .resourceModel(model)
@@ -88,7 +88,7 @@ public class UpdateHandler extends BaseHandler<CallbackContext> {
             if (callbackContext.getTagsToCreate() != null && !callbackContext.getTagsToCreate().isEmpty()) {
                 final CreateTagsRequest createTagsRequest = CreateTagsRequest
                     .builder()
-                    .tags(callbackContext.getTagsToCreate().stream().map(Translator::createSdkTagFromCfnTag).collect(Collectors.toSet()))
+                    .tags(callbackContext.getTagsToCreate().stream().map(TagHelper::createSdkTagFromCfnTag).collect(Collectors.toSet()))
                     .resources(model.getLocalGatewayRouteTableVpcAssociationId())
                     .build();
                 proxy.injectCredentialsAndInvokeV2(createTagsRequest, client::createTags);
@@ -96,7 +96,7 @@ public class UpdateHandler extends BaseHandler<CallbackContext> {
             if (callbackContext.getTagsToDelete() != null && !callbackContext.getTagsToDelete().isEmpty()) {
                 final DeleteTagsRequest deleteTagsRequest = DeleteTagsRequest
                     .builder()
-                    .tags(callbackContext.getTagsToDelete().stream().map(Translator::createSdkTagFromCfnTag).collect(Collectors.toSet()))
+                    .tags(callbackContext.getTagsToDelete().stream().map(TagHelper::createSdkTagFromCfnTag).collect(Collectors.toSet()))
                     .resources(model.getLocalGatewayRouteTableVpcAssociationId())
                     .build();
                 proxy.injectCredentialsAndInvokeV2(deleteTagsRequest, client::deleteTags);

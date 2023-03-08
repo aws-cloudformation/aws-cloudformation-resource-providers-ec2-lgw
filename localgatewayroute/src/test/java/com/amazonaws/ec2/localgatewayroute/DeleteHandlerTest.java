@@ -10,12 +10,14 @@ import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.services.ec2.model.DeleteLocalGatewayRouteRequest;
 import software.amazon.awssdk.services.ec2.model.Ec2Exception;
 import software.amazon.awssdk.services.ec2.model.SearchLocalGatewayRoutesRequest;
-import software.amazon.cloudformation.exceptions.CfnNotFoundException;
+import software.amazon.awssdk.services.ec2.model.SearchLocalGatewayRoutesResponse;
 import software.amazon.cloudformation.proxy.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.amazonaws.ec2.localgatewayroute.CallbackContext.POLLING_DELAY_SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -29,12 +31,16 @@ public class DeleteHandlerTest extends TestBase {
     private Logger logger;
 
     private final ResourceHandlerRequest<ResourceModel> request = ResourceHandlerRequest.<ResourceModel>builder()
-            .desiredResourceState(activeModel)
-            .build();
+        .desiredResourceState(ACTIVE_VIF_GROUP_MODEL)
+        .build();
+
+    private final ResourceHandlerRequest<ResourceModel> requestForEniRoute = ResourceHandlerRequest.<ResourceModel>builder()
+        .desiredResourceState(ACTIVE_ENI_MODEL)
+        .build();
 
     private final CallbackContext inProgressContext = CallbackContext.builder()
-            .deleteStarted(true)
-            .build();
+        .deleteStarted(true)
+        .build();
 
 
     @BeforeEach
@@ -45,17 +51,16 @@ public class DeleteHandlerTest extends TestBase {
 
     @Test
     public void handleRequest_DeleteNotStarted_Success() {
-
         Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
-                .thenReturn(emptyLocalGatewayRoutesResponse);
+            .thenReturn(EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
 
         final DeleteHandler handler = new DeleteHandler();
 
         final ProgressEvent<ResourceModel, CallbackContext> response
-                = handler.handleRequest(proxy, request, null, logger);
+            = handler.handleRequest(proxy, request, null, logger);
 
         verify(proxy)
-                .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
+            .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(OperationStatus.SUCCESS);
@@ -69,83 +74,93 @@ public class DeleteHandlerTest extends TestBase {
 
     @Test
     public void handleRequest_RouteTableIdNotFound() {
+        Map<ResourceHandlerRequest<ResourceModel>, SearchLocalGatewayRoutesResponse> modelResourceMap = new HashMap<ResourceHandlerRequest<ResourceModel>, SearchLocalGatewayRoutesResponse>();
+        modelResourceMap.put(request, EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
+        modelResourceMap.put(requestForEniRoute, EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
 
-        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+        modelResourceMap.forEach((model, searchRoutesResponse) -> {
+            final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
                 .errorCode("InvalidLocalGatewayRouteTableID.NotFound")
                 .build();
 
-        final Ec2Exception notFoundException = (Ec2Exception) Ec2Exception
+            final Ec2Exception notFoundException = (Ec2Exception) Ec2Exception
                 .builder()
                 .awsErrorDetails(errorDetails)
                 .build();
 
-        when(proxy.injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any()))
+            when(proxy.injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any()))
                 .thenThrow(notFoundException);
 
-        final DeleteHandler handler = new DeleteHandler();
+            final DeleteHandler handler = new DeleteHandler();
 
-        final ProgressEvent<ResourceModel, CallbackContext> response
-                = handler.handleRequest(proxy, request, null, logger);
+            final ProgressEvent<ResourceModel, CallbackContext> response
+                = handler.handleRequest(proxy, model, null, logger);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
-        assertThat(response.getCallbackContext()).isNull();
-        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
-        assertThat(response.getResourceModel()).isEqualTo(request.getDesiredResourceState());
-        assertThat(response.getResourceModels()).isNull();
-        assertThat(response.getMessage()).isNotNull();
-        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.NotFound);
+            assertThat(response).isNotNull();
+            assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+            assertThat(response.getCallbackContext()).isNull();
+            assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+            assertThat(response.getResourceModel()).isEqualTo(model.getDesiredResourceState());
+            assertThat(response.getResourceModels()).isNull();
+            assertThat(response.getMessage()).isNotNull();
+            assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.NotFound);
+        });
     }
 
 
     @Test
     public void handleRequest_DestinationCidrNotFound() {
-        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
-            .errorCode("InvalidRoute.NotFound")
-            .build();
+        Map<ResourceHandlerRequest<ResourceModel>, SearchLocalGatewayRoutesResponse> modelResourceMap = new HashMap<ResourceHandlerRequest<ResourceModel>, SearchLocalGatewayRoutesResponse>();
+        modelResourceMap.put(request, EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
+        modelResourceMap.put(requestForEniRoute, EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
 
-        final Ec2Exception notFoundException = (Ec2Exception) Ec2Exception
-            .builder()
-            .awsErrorDetails(errorDetails)
-            .build();
+        modelResourceMap.forEach((model, searchRoutesResponse) -> {
+            final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+                .errorCode("InvalidRoute.NotFound")
+                .build();
 
-        when(proxy.injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any()))
+            final Ec2Exception notFoundException = (Ec2Exception) Ec2Exception
+                .builder()
+                .awsErrorDetails(errorDetails)
+                .build();
+
+            when(proxy.injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any()))
                 .thenThrow(notFoundException);
+
+            final DeleteHandler handler = new DeleteHandler();
+
+            final ProgressEvent<ResourceModel, CallbackContext> response
+                = handler.handleRequest(proxy, model, null, logger);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+            assertThat(response.getCallbackContext()).isNull();
+            assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+            assertThat(response.getResourceModel()).isEqualTo(model.getDesiredResourceState());
+            assertThat(response.getResourceModels()).isNull();
+            assertThat(response.getMessage()).isNotNull();
+            assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.NotFound);
+        });
+    }
+
+    @Test
+    public void handleRequest_InProgress() {
+        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
+            .thenReturn(ACTIVE_VIF_GROUP_SEARCH_LGW_ROUTES_RESPONSE);
 
         final DeleteHandler handler = new DeleteHandler();
 
         final ProgressEvent<ResourceModel, CallbackContext> response
             = handler.handleRequest(proxy, request, null, logger);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
-        assertThat(response.getCallbackContext()).isNull();
-        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
-        assertThat(response.getResourceModel()).isEqualTo(request.getDesiredResourceState());
-        assertThat(response.getResourceModels()).isNull();
-        assertThat(response.getMessage()).isNotNull();
-        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.NotFound);
-    }
-
-    @Test
-    public void handleRequest_InProgress() {
-
-        Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
-                .thenReturn(activeSearchLgwRoutesResponse);
-
-        final DeleteHandler handler = new DeleteHandler();
-
-        final ProgressEvent<ResourceModel, CallbackContext> response
-                = handler.handleRequest(proxy, request, null, logger);
-
         verify(proxy)
-                .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
+            .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(OperationStatus.IN_PROGRESS);
         assertThat(response.getCallbackContext()).isEqualTo(inProgressContext);
         assertThat(response.getCallbackDelaySeconds()).isEqualTo(POLLING_DELAY_SECONDS);
-        assertThat(response.getResourceModel()).isEqualTo(activeModel);
+        assertThat(response.getResourceModel()).isEqualTo(ACTIVE_VIF_GROUP_MODEL);
         assertThat(response.getResourceModels()).isNull();
         assertThat(response.getMessage()).isNull();
         assertThat(response.getErrorCode()).isNull();
@@ -153,17 +168,80 @@ public class DeleteHandlerTest extends TestBase {
 
     @Test
     public void handleRequest_DeleteStarted_Success() {
+        Map<ResourceHandlerRequest<ResourceModel>, SearchLocalGatewayRoutesResponse> modelResourceMap = new HashMap<ResourceHandlerRequest<ResourceModel>, SearchLocalGatewayRoutesResponse>();
+        modelResourceMap.put(request, EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
+        modelResourceMap.put(requestForEniRoute, EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
 
+        modelResourceMap.forEach((model, searchRoutesResponse) -> {
+            Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
+                .thenReturn(searchRoutesResponse);
+
+            final DeleteHandler handler = new DeleteHandler();
+
+            final ProgressEvent<ResourceModel, CallbackContext> response
+                = handler.handleRequest(proxy, model, inProgressContext, logger);
+
+            verify(proxy, times(0))
+                .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
+
+            assertThat(response).isNotNull();
+            assertThat(response.getStatus()).isEqualTo(OperationStatus.SUCCESS);
+            assertThat(response.getCallbackContext()).isNull();
+            assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+            assertThat(response.getResourceModel()).isNull();
+            assertThat(response.getResourceModels()).isNull();
+            assertThat(response.getMessage()).isNull();
+            assertThat(response.getErrorCode()).isNull();
+        });
+    }
+
+    @Test
+    public void handleRequest_DeleteStartedReadFails_Failed() {
+        Map<ResourceHandlerRequest<ResourceModel>, ResourceModel> modelResourceMap = new HashMap<ResourceHandlerRequest<ResourceModel>, ResourceModel>();
+        modelResourceMap.put(request, ACTIVE_VIF_GROUP_MODEL);
+        modelResourceMap.put(requestForEniRoute, ACTIVE_ENI_MODEL);
+
+        modelResourceMap.forEach((modelRequest, expectedModelResponse) -> {
+            final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
+                .errorCode("UnexpectedError")
+                .build();
+
+            final Ec2Exception unexpectedException = (Ec2Exception) Ec2Exception
+                .builder()
+                .awsErrorDetails(errorDetails)
+                .build();
+
+            Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
+                .thenThrow(unexpectedException);
+
+            final DeleteHandler handler = new DeleteHandler();
+
+            final ProgressEvent<ResourceModel, CallbackContext> response
+                = handler.handleRequest(proxy, modelRequest, inProgressContext, logger);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
+            assertThat(response.getCallbackContext()).isNull();
+            assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
+            assertThat(response.getResourceModel()).isEqualTo(expectedModelResponse);
+            assertThat(response.getResourceModels()).isNull();
+            assertThat(response.getMessage()).isNotNull();
+            assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.GeneralServiceException);
+        });
+    }
+
+    @Test
+    public void handleRequest_EniRouteDeleteNotStarted_Success() {
         Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
-                .thenReturn(emptyLocalGatewayRoutesResponse);
+            .thenReturn(EMPTY_SEARCH_LGW_ROUTES_RESPONSE);
 
         final DeleteHandler handler = new DeleteHandler();
 
         final ProgressEvent<ResourceModel, CallbackContext> response
-                = handler.handleRequest(proxy, request, inProgressContext, logger);
+            = handler.handleRequest(proxy, requestForEniRoute, null, logger);
 
-        verify(proxy, times(0))
-                .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
+        verify(proxy)
+            .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(OperationStatus.SUCCESS);
@@ -176,32 +254,25 @@ public class DeleteHandlerTest extends TestBase {
     }
 
     @Test
-    public void handleRequest_DeleteStartedReadFails_Failed() {
-        final AwsErrorDetails errorDetails = AwsErrorDetails.builder()
-            .errorCode("UnexpectedError")
-            .build();
-
-        final Ec2Exception unexpectedException = (Ec2Exception) Ec2Exception
-            .builder()
-            .awsErrorDetails(errorDetails)
-            .build();
-
+    public void handleEniRouteRequest_InProgress() {
         Mockito.lenient().when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
-            .thenThrow(unexpectedException);
+            .thenReturn(ACTIVE_ENI_SEARCH_LGW_ROUTES_RESPONSE);
 
         final DeleteHandler handler = new DeleteHandler();
 
         final ProgressEvent<ResourceModel, CallbackContext> response
-            = handler.handleRequest(proxy, request, inProgressContext, logger);
+            = handler.handleRequest(proxy, requestForEniRoute, null, logger);
+
+        verify(proxy)
+            .injectCredentialsAndInvokeV2(any(DeleteLocalGatewayRouteRequest.class), any());
 
         assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo(OperationStatus.FAILED);
-        assertThat(response.getCallbackContext()).isNull();
-        assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
-        assertThat(response.getResourceModel()).isEqualTo(activeModel);
+        assertThat(response.getStatus()).isEqualTo(OperationStatus.IN_PROGRESS);
+        assertThat(response.getCallbackContext()).isEqualTo(inProgressContext);
+        assertThat(response.getCallbackDelaySeconds()).isEqualTo(POLLING_DELAY_SECONDS);
+        assertThat(response.getResourceModel()).isEqualTo(ACTIVE_ENI_MODEL);
         assertThat(response.getResourceModels()).isNull();
-        assertThat(response.getMessage()).isNotNull();
-        assertThat(response.getErrorCode()).isEqualTo(HandlerErrorCode.GeneralServiceException);
+        assertThat(response.getMessage()).isNull();
+        assertThat(response.getErrorCode()).isNull();
     }
-
 }

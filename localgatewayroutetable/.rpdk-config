@@ -1,0 +1,18 @@
+{
+    "artifact_type": "RESOURCE",
+    "typeName": "AWS::EC2::LocalGatewayRouteTable",
+    "language": "java",
+    "runtime": "java8",
+    "entrypoint": "com.amazonaws.ec2.localgatewayroutetable.HandlerWrapper::handleRequest",
+    "testEntrypoint": "com.amazonaws.ec2.localgatewayroutetable.HandlerWrapper::testEntrypoint",
+    "settings": {
+        "namespace": [
+            "com",
+            "amazonaws",
+            "ec2",
+            "localgatewayroutetable"
+        ],
+        "protocolVersion": "2.0.0"
+    },
+    "executableEntrypoint": "com.amazonaws.ec2.localgatewayroutetable.HandlerWrapperExecutable"
+}

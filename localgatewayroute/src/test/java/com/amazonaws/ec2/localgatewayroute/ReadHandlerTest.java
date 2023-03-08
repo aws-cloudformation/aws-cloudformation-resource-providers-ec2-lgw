@@ -60,7 +60,7 @@ public class ReadHandlerTest extends TestBase {
 
         final SearchLocalGatewayRoutesResponse responseWithAssociation = SearchLocalGatewayRoutesResponse
             .builder()
-            .routes(TEST_ROUTE)
+            .routes(ACTIVE_VIF_GROUP_ROUTE)
             .build();
 
         when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))
@@ -74,7 +74,7 @@ public class ReadHandlerTest extends TestBase {
         assertThat(response.getStatus()).isEqualTo(OperationStatus.SUCCESS);
         assertThat(response.getCallbackContext()).isNull();
         assertThat(response.getCallbackDelaySeconds()).isEqualTo(0);
-        assertThat(response.getResourceModel()).isEqualTo(createModelFromRoute(TEST_ROUTE));
+        assertThat(response.getResourceModel()).isEqualTo(createModelFromRoute(ACTIVE_VIF_GROUP_ROUTE));
         assertThat(response.getResourceModels()).isNull();
         assertThat(response.getMessage()).isNull();
         assertThat(response.getErrorCode()).isNull();
@@ -101,7 +101,7 @@ public class ReadHandlerTest extends TestBase {
 
         final SearchLocalGatewayRoutesResponse response = SearchLocalGatewayRoutesResponse
             .builder()
-            .routes(TEST_ROUTE, TEST_ROUTE)
+            .routes(ACTIVE_VIF_GROUP_ROUTE, ACTIVE_ENI_ROUTE)
             .build();
 
         when(proxy.injectCredentialsAndInvokeV2(any(SearchLocalGatewayRoutesRequest.class), any()))

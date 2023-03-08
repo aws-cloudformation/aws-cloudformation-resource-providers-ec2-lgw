@@ -11,8 +11,14 @@ phases:
       - pre-commit run --all-files
       - cd "$CODEBUILD_SRC_DIR/localgatewayroute"
       - mvn clean verify --no-transfer-progress
+      - cd "$CODEBUILD_SRC_DIR/localgatewayroutetable"
+      - mvn clean verify --no-transfer-progress
+      - cd "$CODEBUILD_SRC_DIR/localgatewayroutetablevifgroupassociation"
+      - mvn clean verify --no-transfer-progress
       - cd "$CODEBUILD_SRC_DIR/localgatewayroutetablevpcassociation"
       - mvn clean verify --no-transfer-progress
       finally:
       - cat "$CODEBUILD_SRC_DIR/localgatewayroute/rpdk.log"
+      - cat "$CODEBUILD_SRC_DIR/localgatewayroutetable/rpdk.log"
+      - cat "$CODEBUILD_SRC_DIR/localgatewayroutetablevifgroupassociation/rpdk.log"
       - cat "$CODEBUILD_SRC_DIR/localgatewayroutetablevpcassociation/rpdk.log"

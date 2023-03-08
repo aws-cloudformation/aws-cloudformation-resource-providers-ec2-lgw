@@ -4,6 +4,7 @@ import software.amazon.awssdk.services.ec2.model.LocalGatewayRouteTableVpcAssoci
 import software.amazon.awssdk.services.ec2.model.TagDescription;
 import software.amazon.cloudformation.proxy.HandlerErrorCode;
 
+import java.util.HashSet;
 import java.util.stream.Collectors;
 
 public class Translator {
@@ -17,31 +18,7 @@ public class Translator {
             .localGatewayRouteTableVpcAssociationId(association.localGatewayRouteTableVpcAssociationId())
             .state(association.state())
             .vpcId(association.vpcId())
-            .tags(association.tags()
-                .stream()
-                .map(Translator::createCfnTagFromSdkTag)
-                .collect(Collectors.toSet()))
-            .build();
-    }
-
-    static software.amazon.awssdk.services.ec2.model.Tag createSdkTagFromCfnTag(final Tag tag) {
-        return software.amazon.awssdk.services.ec2.model.Tag.builder()
-            .key(tag.getKey())
-            .value(tag.getValue())
-            .build();
-    }
-
-    static Tag createCfnTagFromTagDescription(final TagDescription tagDescription) {
-        return Tag.builder()
-            .key(tagDescription.key())
-            .value(tagDescription.value())
-            .build();
-    }
-
-    private static Tag createCfnTagFromSdkTag(final software.amazon.awssdk.services.ec2.model.Tag tag) {
-        return Tag.builder()
-            .key(tag.key())
-            .value(tag.value())
+            .tags(TagHelper.createCfnTagsFromSdkTags(new HashSet<>(association.tags())))
             .build();
     }
 

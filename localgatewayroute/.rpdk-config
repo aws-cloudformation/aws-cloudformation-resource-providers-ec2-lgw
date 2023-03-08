@@ -12,5 +12,6 @@
             "localgatewayroute"
         ],
         "protocolVersion": "2.0.0"
-    }
+    },
+    "executableEntrypoint": "com.amazonaws.ec2.localgatewayroute.HandlerWrapperExecutable"
 }
